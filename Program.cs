@@ -120,7 +120,6 @@ internal sealed class TrayApplicationContext : ApplicationContext
         ApplyMenuTheme(remove.DropDown);
 
         _menu.Items.Add(new ToolStripMenuItem("Configurações...", null, (_, _) => ShowSettings()));
-        _menu.Items.Add(new ToolStripMenuItem("Abrir configuração (INI)", null, (_, _) => OpenConfig()));
         _menu.Items.Add(new ToolStripMenuItem("Sobre", null, (_, _) => ShowAbout()));
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(new ToolStripMenuItem("Sair", null, (_, _) => ExitApplication()));
@@ -278,6 +277,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         using var settingsForm = new SettingsForm(
             _settings,
+            _folders,
+            _store,
             ThemeManager.IsDark(_settings.Theme));
 
         if (settingsForm.ShowDialog() != DialogResult.OK)
@@ -285,31 +286,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
+        _folders = settingsForm.Folders;
         _settings = settingsForm.Settings;
         _store.Save(_folders, _settings);
         ApplyTheme();
-    }
-
-    private void OpenConfig()
-    {
-        try
-        {
-            _store.EnsureCreated();
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "explorer.exe",
-                Arguments = $"/select,\"{_store.FilePath}\"",
-                UseShellExecute = true
-            });
-        }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
-        {
-            MessageBox.Show(
-                $"Não foi possível abrir a configuração:\n{_store.FilePath}\n\n{ex.Message}",
-                AppName,
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
-        }
     }
 
     private void ShowAbout()
@@ -483,14 +463,17 @@ internal sealed class SettingsForm : Form
     private readonly RadioButton _lightTheme;
     private readonly RadioButton _darkTheme;
     private readonly RadioButton _systemTheme;
+    private readonly FolderStore _store;
 
-    public SettingsForm(AppSettings settings, bool dark)
+    public SettingsForm(AppSettings settings, IEnumerable<string> folders, FolderStore store, bool dark)
     {
         Settings = new AppSettings
         {
             HideFileExtensions = settings.HideFileExtensions,
             Theme = settings.Theme
         };
+        Folders = new List<string>(folders);
+        _store = store;
 
         Text = "Configurações";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -498,7 +481,7 @@ internal sealed class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(380, 280);
+        ClientSize = new Size(380, 340);
         AutoScaleMode = AutoScaleMode.Dpi;
 
         _startWithWindows = new CheckBox
@@ -513,7 +496,6 @@ internal sealed class SettingsForm : Form
         {
             Text = "Não exibir a extensão do arquivo",
             AutoSize = true,
-            Checked = settings.HideFileExtensions,
             Location = new Point(24, 58)
         };
 
@@ -538,18 +520,7 @@ internal sealed class SettingsForm : Form
             Location = new Point(20, 84)
         };
 
-        switch (settings.Theme)
-        {
-            case AppTheme.Claro:
-                _lightTheme.Checked = true;
-                break;
-            case AppTheme.Escuro:
-                _darkTheme.Checked = true;
-                break;
-            default:
-                _systemTheme.Checked = true;
-                break;
-        }
+        ApplySettingsToControls(settings);
 
         var themeGroup = new GroupBox
         {
@@ -559,11 +530,27 @@ internal sealed class SettingsForm : Form
         };
         themeGroup.Controls.AddRange(new Control[] { _lightTheme, _darkTheme, _systemTheme });
 
+        var export = new Button
+        {
+            Text = "Exportar configurações",
+            Size = new Size(164, 32),
+            Location = new Point(24, 232)
+        };
+        export.Click += (_, _) => ExportSettings();
+
+        var import = new Button
+        {
+            Text = "Importar configurações",
+            Size = new Size(164, 32),
+            Location = new Point(192, 232)
+        };
+        import.Click += (_, _) => ImportSettings();
+
         var ok = new Button
         {
             Text = "OK",
             Size = new Size(90, 32),
-            Location = new Point(ClientSize.Width - 214, ClientSize.Height - 48)
+            Location = new Point(ClientSize.Width - 214, ClientSize.Height - 56)
         };
         ok.Click += (_, _) => SaveAndClose();
 
@@ -572,7 +559,7 @@ internal sealed class SettingsForm : Form
             Text = "Cancelar",
             DialogResult = DialogResult.Cancel,
             Size = new Size(90, 32),
-            Location = new Point(ClientSize.Width - 114, ClientSize.Height - 48)
+            Location = new Point(ClientSize.Width - 114, ClientSize.Height - 56)
         };
 
         AcceptButton = ok;
@@ -582,6 +569,8 @@ internal sealed class SettingsForm : Form
             _startWithWindows,
             _hideFileExtensions,
             themeGroup,
+            export,
+            import,
             ok,
             cancel
         });
@@ -589,7 +578,102 @@ internal sealed class SettingsForm : Form
         ThemeManager.ApplyForm(this, dark);
     }
 
-    public AppSettings Settings { get; }
+    public AppSettings Settings { get; private set; }
+
+    public List<string> Folders { get; private set; }
+
+    private void ApplySettingsToControls(AppSettings settings)
+    {
+        _hideFileExtensions.Checked = settings.HideFileExtensions;
+        _lightTheme.Checked = settings.Theme == AppTheme.Claro;
+        _darkTheme.Checked = settings.Theme == AppTheme.Escuro;
+        _systemTheme.Checked = settings.Theme == AppTheme.Sistema;
+    }
+
+    private AppSettings ReadSettingsFromControls()
+    {
+        return new AppSettings
+        {
+            HideFileExtensions = _hideFileExtensions.Checked,
+            Theme = _darkTheme.Checked
+                ? AppTheme.Escuro
+                : _lightTheme.Checked
+                    ? AppTheme.Claro
+                    : AppTheme.Sistema
+        };
+    }
+
+    private void ExportSettings()
+    {
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Exportar configurações",
+            Filter = "Configuração do MyFolderMenu (*.ini)|*.ini|Todos os arquivos (*.*)|*.*",
+            FileName = "MyFolderMenu.ini",
+            DefaultExt = "ini",
+            AddExtension = true,
+            OverwritePrompt = true,
+            RestoreDirectory = true
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        if (_store.TryExport(dialog.FileName, Folders, ReadSettingsFromControls()))
+        {
+            MessageBox.Show(
+                $"Configurações exportadas para:\n{dialog.FileName}",
+                "MyFolderMenu",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        else
+        {
+            MessageBox.Show(
+                $"Não foi possível exportar as configurações para:\n{dialog.FileName}",
+                "MyFolderMenu",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private void ImportSettings()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Importar configurações",
+            Filter = "Configuração do MyFolderMenu (*.ini)|*.ini|Todos os arquivos (*.*)|*.*",
+            DefaultExt = "ini",
+            CheckFileExists = true,
+            RestoreDirectory = true
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        if (!_store.TryImport(dialog.FileName, out var folders, out var settings))
+        {
+            MessageBox.Show(
+                $"Arquivo de configuração inválido ou inacessível:\n{dialog.FileName}",
+                "MyFolderMenu",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            return;
+        }
+
+        Folders = folders;
+        ApplySettingsToControls(settings);
+        ThemeManager.ApplyForm(this, ThemeManager.IsDark(settings.Theme));
+        MessageBox.Show(
+            $"Configurações importadas de:\n{dialog.FileName}\n\nClique em OK para aplicar.",
+            "MyFolderMenu",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+    }
 
     private void SaveAndClose()
     {
@@ -607,13 +691,7 @@ internal sealed class SettingsForm : Form
             return;
         }
 
-        Settings.HideFileExtensions = _hideFileExtensions.Checked;
-        Settings.Theme = _darkTheme.Checked
-            ? AppTheme.Escuro
-            : _lightTheme.Checked
-                ? AppTheme.Claro
-                : AppTheme.Sistema;
-
+        Settings = ReadSettingsFromControls();
         DialogResult = DialogResult.OK;
         Close();
     }
@@ -689,23 +767,85 @@ internal sealed class FolderStore
         try
         {
             Directory.CreateDirectory(DirectoryPath);
-            var normalized = Normalize(folders);
-            var lines = new List<string> { "[Folders]" };
-            for (var index = 0; index < normalized.Count; index++)
-            {
-                lines.Add($"Folder{index + 1}={normalized[index]}");
-            }
-
-            lines.Add(string.Empty);
-            lines.Add("[Settings]");
-            lines.Add($"HideFileExtensions={(settings.HideFileExtensions ? 1 : 0)}");
-            lines.Add($"Theme={ThemeManager.ToIniValue(settings.Theme)}");
-
-            File.WriteAllLines(FilePath, lines);
+            WriteIni(FilePath, folders, settings);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
         }
+    }
+
+    public bool TryExport(string path, IEnumerable<string> folders, AppSettings settings)
+    {
+        try
+        {
+            WriteIni(path, folders, settings);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    public bool TryImport(string path, out List<string> folders, out AppSettings settings)
+    {
+        folders = new List<string>();
+        settings = new AppSettings();
+
+        try
+        {
+            var lines = File.ReadAllLines(path);
+            if (!HasFoldersSection(lines))
+            {
+                return false;
+            }
+
+            folders = ParseIni(lines);
+            settings = ParseSettings(lines);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private static void WriteIni(string path, IEnumerable<string> folders, AppSettings settings)
+    {
+        var normalized = Normalize(folders);
+        var lines = new List<string> { "[Folders]" };
+        for (var index = 0; index < normalized.Count; index++)
+        {
+            lines.Add($"Folder{index + 1}={normalized[index]}");
+        }
+
+        lines.Add(string.Empty);
+        lines.Add("[Settings]");
+        lines.Add($"HideFileExtensions={(settings.HideFileExtensions ? 1 : 0)}");
+        lines.Add($"Theme={ThemeManager.ToIniValue(settings.Theme)}");
+
+        File.WriteAllLines(path, lines);
+    }
+
+    private static bool HasFoldersSection(IEnumerable<string> lines)
+    {
+        foreach (var raw in lines)
+        {
+            var line = raw.Trim();
+            if (!line.StartsWith('[') || !line.EndsWith(']'))
+            {
+                continue;
+            }
+
+            var section = line[1..^1].Trim();
+            if (section.Equals("Folders", StringComparison.OrdinalIgnoreCase)
+                || section.Equals("Pastas", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static List<string> ParseIni(IEnumerable<string> lines)
