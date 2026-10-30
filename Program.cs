@@ -1,8 +1,10 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
+using System.Security;
 using System.Text.Json;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 internal static class Program
 {
@@ -22,6 +24,19 @@ internal static class Program
     }
 }
 
+internal enum AppTheme
+{
+    Sistema,
+    Claro,
+    Escuro
+}
+
+internal sealed class AppSettings
+{
+    public bool HideFileExtensions { get; set; } = true;
+    public AppTheme Theme { get; set; } = AppTheme.Sistema;
+}
+
 internal sealed class TrayApplicationContext : ApplicationContext
 {
     private const string AppName = "MyFolderMenu";
@@ -33,6 +48,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly Image _folderImage;
     private readonly Dictionary<string, Image> _fileImages = new(StringComparer.OrdinalIgnoreCase);
     private List<string> _folders;
+    private AppSettings _settings;
 
     public TrayApplicationContext()
     {
@@ -40,11 +56,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _folderImage = _folderIcon.ToBitmap();
         _store.EnsureCreated();
         _folders = _store.Load();
+        _settings = _store.LoadSettings();
 
         _menu = new ContextMenuStrip { ShowItemToolTips = true };
         _menu.Opening += (_, _) =>
         {
             _folders = _store.Load();
+            _settings = _store.LoadSettings();
             BuildMenu();
         };
 
@@ -62,6 +80,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void BuildMenu()
     {
+        ApplyTheme();
         ClearItems(_menu.Items);
         ClearFileImages();
 
@@ -97,8 +116,11 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         manage.DropDownItems.Add(remove);
         _menu.Items.Add(manage);
+        ApplyMenuTheme(manage.DropDown);
+        ApplyMenuTheme(remove.DropDown);
 
-        _menu.Items.Add(new ToolStripMenuItem("Abrir configuração", null, (_, _) => OpenConfig()));
+        _menu.Items.Add(new ToolStripMenuItem("Configurações...", null, (_, _) => ShowSettings()));
+        _menu.Items.Add(new ToolStripMenuItem("Abrir configuração (INI)", null, (_, _) => OpenConfig()));
         _menu.Items.Add(new ToolStripMenuItem("Sobre", null, (_, _) => ShowAbout()));
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(new ToolStripMenuItem("Sair", null, (_, _) => ExitApplication()));
@@ -117,6 +139,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             item.DropDownItems.Add(new ToolStripMenuItem("Carregando...") { Enabled = false });
             item.DropDown.ShowItemToolTips = true;
+            ApplyMenuTheme(item.DropDown);
             item.DropDownOpening += (_, _) => PopulateSubmenu(item);
         }
         else
@@ -129,7 +152,16 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private ToolStripMenuItem CreateFileItem(string path)
     {
-        var item = new ToolStripMenuItem(Escape(Path.GetFileName(path)))
+        var label = _settings.HideFileExtensions
+            ? Path.GetFileNameWithoutExtension(path)
+            : Path.GetFileName(path);
+
+        if (string.IsNullOrEmpty(label))
+        {
+            label = Path.GetFileName(path);
+        }
+
+        var item = new ToolStripMenuItem(Escape(label))
         {
             Image = GetFileImage(path),
             ToolTipText = path
@@ -231,15 +263,31 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _folders.Add(dialog.SelectedPath);
         }
 
-        _store.Save(_folders);
+        _store.Save(_folders, _settings);
         _folders = _store.Load();
     }
 
     private void RemoveFolder(string folder)
     {
         _folders.RemoveAll(item => string.Equals(item, folder, StringComparison.OrdinalIgnoreCase));
-        _store.Save(_folders);
+        _store.Save(_folders, _settings);
         _folders = _store.Load();
+    }
+
+    private void ShowSettings()
+    {
+        using var settingsForm = new SettingsForm(
+            _settings,
+            ThemeManager.IsDark(_settings.Theme));
+
+        if (settingsForm.ShowDialog() != DialogResult.OK)
+        {
+            return;
+        }
+
+        _settings = settingsForm.Settings;
+        _store.Save(_folders, _settings);
+        ApplyTheme();
     }
 
     private void OpenConfig()
@@ -264,9 +312,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private static void ShowAbout()
+    private void ShowAbout()
     {
-        using var about = new AboutForm();
+        using var about = new AboutForm(ThemeManager.IsDark(_settings.Theme));
         about.ShowDialog();
     }
 
@@ -346,6 +394,16 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
+    private void ApplyTheme()
+    {
+        ApplyMenuTheme(_menu);
+    }
+
+    private void ApplyMenuTheme(ToolStripDropDown menu)
+    {
+        ThemeManager.ApplyMenu(menu, ThemeManager.IsDark(_settings.Theme));
+    }
+
     private void ExitApplication()
     {
         _notifyIcon.Visible = false;
@@ -371,7 +429,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private sealed class AboutForm : Form
     {
-        public AboutForm()
+        public AboutForm(bool dark)
         {
             Text = "Sobre o MyFolderMenu";
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -413,7 +471,151 @@ internal sealed class TrayApplicationContext : ApplicationContext
             AcceptButton = ok;
             CancelButton = ok;
             Controls.AddRange(new Control[] { title, version, copyright, ok });
+            ThemeManager.ApplyForm(this, dark);
         }
+    }
+}
+
+internal sealed class SettingsForm : Form
+{
+    private readonly CheckBox _startWithWindows;
+    private readonly CheckBox _hideFileExtensions;
+    private readonly RadioButton _lightTheme;
+    private readonly RadioButton _darkTheme;
+    private readonly RadioButton _systemTheme;
+
+    public SettingsForm(AppSettings settings, bool dark)
+    {
+        Settings = new AppSettings
+        {
+            HideFileExtensions = settings.HideFileExtensions,
+            Theme = settings.Theme
+        };
+
+        Text = "Configurações";
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        StartPosition = FormStartPosition.CenterScreen;
+        MaximizeBox = false;
+        MinimizeBox = false;
+        ShowInTaskbar = false;
+        ClientSize = new Size(380, 280);
+        AutoScaleMode = AutoScaleMode.Dpi;
+
+        _startWithWindows = new CheckBox
+        {
+            Text = "Iniciar com o Windows",
+            AutoSize = true,
+            Checked = StartupManager.IsEnabled(),
+            Location = new Point(24, 24)
+        };
+
+        _hideFileExtensions = new CheckBox
+        {
+            Text = "Não exibir a extensão do arquivo",
+            AutoSize = true,
+            Checked = settings.HideFileExtensions,
+            Location = new Point(24, 58)
+        };
+
+        _lightTheme = new RadioButton
+        {
+            Text = "Claro",
+            AutoSize = true,
+            Location = new Point(20, 28)
+        };
+
+        _darkTheme = new RadioButton
+        {
+            Text = "Escuro",
+            AutoSize = true,
+            Location = new Point(20, 56)
+        };
+
+        _systemTheme = new RadioButton
+        {
+            Text = "Sistema",
+            AutoSize = true,
+            Location = new Point(20, 84)
+        };
+
+        switch (settings.Theme)
+        {
+            case AppTheme.Claro:
+                _lightTheme.Checked = true;
+                break;
+            case AppTheme.Escuro:
+                _darkTheme.Checked = true;
+                break;
+            default:
+                _systemTheme.Checked = true;
+                break;
+        }
+
+        var themeGroup = new GroupBox
+        {
+            Text = "Tema",
+            Location = new Point(24, 98),
+            Size = new Size(332, 118)
+        };
+        themeGroup.Controls.AddRange(new Control[] { _lightTheme, _darkTheme, _systemTheme });
+
+        var ok = new Button
+        {
+            Text = "OK",
+            Size = new Size(90, 32),
+            Location = new Point(ClientSize.Width - 214, ClientSize.Height - 48)
+        };
+        ok.Click += (_, _) => SaveAndClose();
+
+        var cancel = new Button
+        {
+            Text = "Cancelar",
+            DialogResult = DialogResult.Cancel,
+            Size = new Size(90, 32),
+            Location = new Point(ClientSize.Width - 114, ClientSize.Height - 48)
+        };
+
+        AcceptButton = ok;
+        CancelButton = cancel;
+        Controls.AddRange(new Control[]
+        {
+            _startWithWindows,
+            _hideFileExtensions,
+            themeGroup,
+            ok,
+            cancel
+        });
+
+        ThemeManager.ApplyForm(this, dark);
+    }
+
+    public AppSettings Settings { get; }
+
+    private void SaveAndClose()
+    {
+        try
+        {
+            StartupManager.SetEnabled(_startWithWindows.Checked);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or SecurityException or IOException or InvalidOperationException)
+        {
+            MessageBox.Show(
+                $"Não foi possível alterar a inicialização com o Windows:\n\n{ex.Message}",
+                "MyFolderMenu",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            return;
+        }
+
+        Settings.HideFileExtensions = _hideFileExtensions.Checked;
+        Settings.Theme = _darkTheme.Checked
+            ? AppTheme.Escuro
+            : _lightTheme.Checked
+                ? AppTheme.Claro
+                : AppTheme.Sistema;
+
+        DialogResult = DialogResult.OK;
+        Close();
     }
 }
 
@@ -440,7 +642,7 @@ internal sealed class FolderStore
             folders = GetDefaultFolders();
         }
 
-        Save(folders);
+        Save(folders, new AppSettings());
     }
 
     public List<string> Load()
@@ -465,7 +667,24 @@ internal sealed class FolderStore
         }
     }
 
-    public void Save(IEnumerable<string> folders)
+    public AppSettings LoadSettings()
+    {
+        try
+        {
+            if (File.Exists(FilePath))
+            {
+                return ParseSettings(File.ReadAllLines(FilePath));
+            }
+
+            return new AppSettings();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new AppSettings();
+        }
+    }
+
+    public void Save(IEnumerable<string> folders, AppSettings settings)
     {
         try
         {
@@ -476,6 +695,11 @@ internal sealed class FolderStore
             {
                 lines.Add($"Folder{index + 1}={normalized[index]}");
             }
+
+            lines.Add(string.Empty);
+            lines.Add("[Settings]");
+            lines.Add($"HideFileExtensions={(settings.HideFileExtensions ? 1 : 0)}");
+            lines.Add($"Theme={ThemeManager.ToIniValue(settings.Theme)}");
 
             File.WriteAllLines(FilePath, lines);
         }
@@ -526,6 +750,58 @@ internal sealed class FolderStore
         }
 
         return Normalize(folders);
+    }
+
+    private static AppSettings ParseSettings(IEnumerable<string> lines)
+    {
+        var settings = new AppSettings();
+        var inSettingsSection = false;
+
+        foreach (var raw in lines)
+        {
+            var line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith(';') || line.StartsWith('#'))
+            {
+                continue;
+            }
+
+            if (line.StartsWith('[') && line.EndsWith(']'))
+            {
+                var section = line[1..^1].Trim();
+                inSettingsSection = section.Equals("Settings", StringComparison.OrdinalIgnoreCase);
+                continue;
+            }
+
+            if (!inSettingsSection)
+            {
+                continue;
+            }
+
+            var separator = line.IndexOf('=');
+            if (separator <= 0)
+            {
+                continue;
+            }
+
+            var key = line[..separator].Trim();
+            var value = line[(separator + 1)..].Trim();
+
+            if (key.Equals("HideFileExtensions", StringComparison.OrdinalIgnoreCase))
+            {
+                settings.HideFileExtensions = value.ToLowerInvariant() switch
+                {
+                    "1" or "true" or "sim" or "yes" => true,
+                    "0" or "false" or "nao" or "não" or "no" => false,
+                    _ => settings.HideFileExtensions
+                };
+            }
+            else if (key.Equals("Theme", StringComparison.OrdinalIgnoreCase))
+            {
+                settings.Theme = ThemeManager.FromIniValue(value);
+            }
+        }
+
+        return settings;
     }
 
     private List<string> LoadLegacyJson()
@@ -686,6 +962,191 @@ internal static class ShellIcons
         finally
         {
             DestroyIcon(info.hIcon);
+        }
+    }
+}
+
+internal static class ThemeManager
+{
+    private const int DwmwaUseImmersiveDarkMode = 20;
+
+    private static readonly Color DarkWindow = Color.FromArgb(32, 32, 32);
+    private static readonly Color DarkMenu = Color.FromArgb(37, 37, 38);
+    private static readonly Color DarkMenuHover = Color.FromArgb(62, 62, 66);
+    private static readonly Color DarkBorder = Color.FromArgb(72, 72, 76);
+    private static readonly Color DarkButton = Color.FromArgb(48, 48, 52);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    public static bool IsDark(AppTheme theme)
+    {
+        if (theme == AppTheme.Escuro)
+        {
+            return true;
+        }
+
+        if (theme == AppTheme.Claro)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return key?.GetValue("AppsUseLightTheme") is int value && value == 0;
+        }
+        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return false;
+        }
+    }
+
+    public static string ToIniValue(AppTheme theme)
+    {
+        return theme switch
+        {
+            AppTheme.Claro => "Claro",
+            AppTheme.Escuro => "Escuro",
+            _ => "Sistema"
+        };
+    }
+
+    public static AppTheme FromIniValue(string? value)
+    {
+        return value?.Trim().ToLowerInvariant() switch
+        {
+            "claro" or "light" => AppTheme.Claro,
+            "escuro" or "dark" => AppTheme.Escuro,
+            _ => AppTheme.Sistema
+        };
+    }
+
+    public static void ApplyMenu(ToolStripDropDown menu, bool dark)
+    {
+        menu.Renderer = new ToolStripProfessionalRenderer(new MenuColorTable(dark))
+        {
+            RoundedEdges = false
+        };
+        menu.BackColor = dark ? DarkMenu : SystemColors.Window;
+        menu.ForeColor = dark ? Color.White : SystemColors.ControlText;
+
+        if (menu is ToolStripDropDownMenu dropDownMenu)
+        {
+            dropDownMenu.ShowImageMargin = true;
+        }
+    }
+
+    public static void ApplyForm(Form form, bool dark)
+    {
+        var background = dark ? DarkWindow : SystemColors.Control;
+        form.BackColor = background;
+        form.ForeColor = dark ? Color.White : SystemColors.ControlText;
+        ApplyControlTheme(form.Controls, dark, background);
+        ApplyTitleBar(form, dark);
+    }
+
+    private static void ApplyControlTheme(Control.ControlCollection controls, bool dark, Color background)
+    {
+        foreach (Control control in controls)
+        {
+            control.ForeColor = dark ? Color.White : SystemColors.ControlText;
+            control.BackColor = background;
+
+            if (control is Button button)
+            {
+                button.FlatStyle = FlatStyle.Flat;
+                button.BackColor = dark ? DarkButton : SystemColors.Control;
+                button.FlatAppearance.BorderColor = dark ? DarkBorder : SystemColors.ControlDark;
+            }
+
+            if (control.HasChildren)
+            {
+                ApplyControlTheme(control.Controls, dark, background);
+            }
+        }
+    }
+
+    private static void ApplyTitleBar(Form form, bool dark)
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
+        {
+            return;
+        }
+
+        try
+        {
+            var value = dark ? 1 : 0;
+            DwmSetWindowAttribute(form.Handle, DwmwaUseImmersiveDarkMode, ref value, sizeof(int));
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+        }
+    }
+
+    private sealed class MenuColorTable : ProfessionalColorTable
+    {
+        private readonly bool _dark;
+
+        public MenuColorTable(bool dark)
+        {
+            _dark = dark;
+            UseSystemColors = false;
+        }
+
+        private Color Background => _dark ? DarkMenu : SystemColors.Window;
+        private Color Selected => _dark ? DarkMenuHover : SystemColors.Highlight;
+
+        public override Color ToolStripDropDownBackground => Background;
+        public override Color ImageMarginGradientBegin => Background;
+        public override Color ImageMarginGradientMiddle => Background;
+        public override Color ImageMarginGradientEnd => Background;
+        public override Color MenuBorder => _dark ? DarkBorder : SystemColors.ControlDark;
+        public override Color MenuItemBorder => Selected;
+        public override Color MenuItemSelected => Selected;
+        public override Color MenuItemSelectedGradientBegin => Selected;
+        public override Color MenuItemSelectedGradientEnd => Selected;
+        public override Color MenuItemPressedGradientBegin => Selected;
+        public override Color MenuItemPressedGradientMiddle => Selected;
+        public override Color MenuItemPressedGradientEnd => Selected;
+        public override Color SeparatorDark => _dark ? Color.FromArgb(78, 78, 82) : SystemColors.ControlDark;
+        public override Color SeparatorLight => _dark ? Color.FromArgb(50, 50, 54) : SystemColors.ControlLight;
+        public override Color CheckBackground => Background;
+        public override Color CheckSelectedBackground => Selected;
+    }
+}
+
+internal static class StartupManager
+{
+    private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    private const string ValueName = "MyFolderMenu";
+
+    public static bool IsEnabled()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath);
+            return key?.GetValue(ValueName) is string value && !string.IsNullOrWhiteSpace(value);
+        }
+        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return false;
+        }
+    }
+
+    public static void SetEnabled(bool enabled)
+    {
+        using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath, true)
+            ?? throw new InvalidOperationException("Não foi possível acessar a inicialização do Windows.");
+
+        if (enabled)
+        {
+            key.SetValue(ValueName, $"\"{Application.ExecutablePath}\"", RegistryValueKind.String);
+        }
+        else
+        {
+            key.DeleteValue(ValueName, false);
         }
     }
 }
