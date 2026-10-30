@@ -7,12 +7,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <AssemblyName>MyFolderMenu</AssemblyName>
     <RootNamespace>MyFolderMenu</RootNamespace>
-    <Version>0.2.1</Version>
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
 </Project>

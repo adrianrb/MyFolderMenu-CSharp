@@ -52,7 +52,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     public TrayApplicationContext()
     {
-        _folderIcon = ShellIcons.GetFolderIcon();
+        _folderIcon = LoadApplicationIcon();
         _folderImage = _folderIcon.ToBitmap();
         _store.EnsureCreated();
         _folders = _store.Load();
@@ -350,6 +350,23 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             return false;
         }
+    }
+
+    private static Icon LoadApplicationIcon()
+    {
+        try
+        {
+            var icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            if (icon is not null)
+            {
+                return icon;
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or System.ComponentModel.Win32Exception)
+        {
+        }
+
+        return ShellIcons.GetFolderIcon();
     }
 
     private static string GetFolderLabel(string path)
