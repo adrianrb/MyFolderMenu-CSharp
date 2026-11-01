@@ -1,7 +1,8 @@
 # AGENTS.md
 
 ## Status
-- .NET 8 WinForms tray app (`MyFolderMenu`); git repo initialized, no remote configured.
+- .NET 8 WinForms tray app (`MyFolderMenu`); remote `adrianrb/MyFolderMenu-CSharp` (branch `master`).
+- Remote push uses Windows Git (`/mnt/c/Desenv/Git/cmd/git.exe`, `credential.helper=wincred`). Releases attach `release/MyFolderMenu-X.Y.Z-win-x64.zip` plus `SHA256SUMS.txt`; body comes from `RELEASE_X.Y.Z.md`.
 - Current version is `1.0.0`, stored in both `version.txt` and `<Version>` in the csproj; keep them in sync.
 - No tests, lint, CI, or solution file. The only verification is `dotnet.exe build`; never claim tests were run.
 
