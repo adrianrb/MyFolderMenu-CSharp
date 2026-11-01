@@ -1,9 +1,0 @@
-MyFolderMenu.exe
-*.res
-*.res.o
-*.obj
-*.o
-*.pdb
-*.ilk
-*.exp
-*.lib
