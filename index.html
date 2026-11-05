@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyFolderMenu — Quick access to your favorite folders</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #d4d4d4;
+            --accent-color: #007acc;
+            --card-bg: #252526;
+            --border-color: #333333;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        .lang-switch {
+            text-align: right;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .lang-switch a {
+            color: var(--text-color);
+            text-decoration: none;
+            margin-left: 15px;
+        }
+        .lang-switch a.active {
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        h1 {
+            color: #ffffff;
+            margin-bottom: 10px;
+        }
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .btn {
+            display: inline-block;
+            background-color: var(--accent-color);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .btn:hover {
+            opacity: 0.9;
+        }
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 13px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="lang-switch">
+            <a href="index.html" class="active">🇺🇸 English</a>
+            <a href="pt/index.html">🇧🇷 Português (Brasil)</a>
+        </div>
+
+        <header>
+            <h1>MyFolderMenu</h1>
+            <p>A lightweight, high-performance Windows system tray application (.NET 8 WinForms) for quick folder and file access.</p>
+            <a href="https://github.com/adrianrb/MyFolderMenu-CSharp/releases/latest/download/MyFolderMenu-1.0.0-win-x64.zip" class="btn">Download v1.0.0 (Win x64)</a>
+        </header>
+
+        <div class="card">
+            <h2>Features</h2>
+            <ul>
+                <li><strong>System Tray Integration:</strong> Runs quietly in your system tray without taskbar clutter.</li>
+                <li><strong>Lazy Loading Submenus:</strong> Folders and files are loaded on demand when opening submenus for instant startup.</li>
+                <li><strong>Smart Organization:</strong> Subdirectories appear first, followed by files, all alphabetically sorted.</li>
+                <li><strong>Real Shell Icons:</strong> Authentic Windows icons and registered handlers for every file and folder.</li>
+                <li><strong>Customizable Settings:</strong> Toggle file extension visibility, choose Light, Dark, or System themes, and configure Windows startup.</li>
+                <li><strong>Portable & Persistent:</strong> Configuration saved in `%APPDATA%\MyFolderMenu\folders.ini` with full export/import support.</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>Requirements</h2>
+            <ul>
+                <li>Windows 10 or Windows 11 (64-bit)</li>
+                <li>.NET 8 Desktop Runtime (x64)</li>
+            </ul>
+        </div>
+
+        <footer>
+            <p>&copy; 2026 Adrian Barbosa. Open Source / Copyleft.</p>
+        </footer>
+    </div>
+</body>
+</html>

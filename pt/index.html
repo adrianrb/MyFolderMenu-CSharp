@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyFolderMenu — Acesso rápido às suas pastas favoritas</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #d4d4d4;
+            --accent-color: #007acc;
+            --card-bg: #252526;
+            --border-color: #333333;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        .lang-switch {
+            text-align: right;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .lang-switch a {
+            color: var(--text-color);
+            text-decoration: none;
+            margin-left: 15px;
+        }
+        .lang-switch a.active {
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        h1 {
+            color: #ffffff;
+            margin-bottom: 10px;
+        }
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .btn {
+            display: inline-block;
+            background-color: var(--accent-color);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .btn:hover {
+            opacity: 0.9;
+        }
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 13px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="lang-switch">
+            <a href="../index.html">🇺🇸 English</a>
+            <a href="index.html" class="active">🇧🇷 Português (Brasil)</a>
+        </div>
+
+        <header>
+            <h1>MyFolderMenu</h1>
+            <p>Um aplicativo leve e de alto desempenho para a bandeja do sistema Windows (.NET 8 WinForms) para acesso rápido a pastas e arquivos.</p>
+            <a href="https://github.com/adrianrb/MyFolderMenu-CSharp/releases/latest/download/MyFolderMenu-1.0.0-win-x64.zip" class="btn">Baixar v1.0.0 (Win x64)</a>
+        </header>
+
+        <div class="card">
+            <h2>Recursos</h2>
+            <ul>
+                <li><strong>Integração com a Bandeja:</strong> Executa discretamente na área de notificação sem poluir a barra de tarefas.</li>
+                <li><strong>Submenus sob Demanda:</strong> Pastas e arquivos são carregados dinamicamente ao abrir os submenus, garantindo inicialização instantânea.</li>
+                <li><strong>Organização Inteligente:</strong> Subdiretórios aparecem primeiro, seguidos pelos arquivos, todos ordenados alfabeticamente.</li>
+                <li><strong>Ícones Reais do Shell:</strong> Ícones autênticos do Windows e manipuladores registrados para cada arquivo e pasta.</li>
+                <li><strong>Configurações Customizáveis:</strong> Oculte ou exiba extensões de arquivos, escolha entre temas Claro, Escuro ou do Sistema, e configure a inicialização com o Windows.</li>
+                <li><strong>Portátil e Persistente:</strong> Configuração salva em `%APPDATA%\MyFolderMenu\folders.ini` com suporte completo a exportação e importação.</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>Requisitos</h2>
+            <ul>
+                <li>Windows 10 ou Windows 11 (64 bits)</li>
+                <li>.NET 8 Desktop Runtime (x64)</li>
+            </ul>
+        </div>
+
+        <footer>
+            <p>&copy; 2026 Adrian Barbosa. Open Source / Copyleft.</p>
+        </footer>
+    </div>
+</body>
+</html>
