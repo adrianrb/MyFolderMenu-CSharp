@@ -1,4 +1,5 @@
 🇺🇸 [English](RELEASE_1.0.0.en.md) | 🇧🇷 [Português (Brasil)](RELEASE_1.0.0.md)
+<!-- updated -->
 
 # MyFolderMenu 1.0.0
 
