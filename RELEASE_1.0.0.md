@@ -1,3 +1,5 @@
+🇺🇸 [English](RELEASE_1.0.0.en.md) | 🇧🇷 [Português (Brasil)](RELEASE_1.0.0.md)
+
 # MyFolderMenu 1.0.0
 
 **Tag:** `v1.0.0`  
